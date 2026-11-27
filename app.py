@@ -28,8 +28,8 @@ if "grid_size" not in st.session_state:
             "status": "생존",
             "age": 0,
             "is_new": False,
-            "hunger_timer": 0,  # 초식: 풀 못 먹은 턴 / 육식: 사냥 못 한 턴
-            "dead_turns": 0,  # 사망 후 해골로 남은 턴 수
+            "hunger_timer": 0,
+            "dead_turns": 0,
         })
         cid += 1
 
@@ -165,12 +165,12 @@ if menu == "크리처 도감":
         """
     - **초식동물(토끼, 스컹크, 닭, 병아리)**: 매 턴 지역별 **70% 확률로 자라는 풀**을 먹어야 합니다. 3턴 동안 풀을 먹지 못하면 아사(사망)합니다.
     - **포식자(여우, 늑대)**: 3턴 동안 사냥 및 먹이 섭취를 하지 못하면 아사(사망)합니다.
+    - **달걀 규칙**: 산란 다음 턴에 병아리로 부화하며, 부서지더라도 **시체(💀)가 남지 않고 한 번에 최대 3개까지만** 부서집니다.
     - **산불 시스템**: 
       - 매 턴 각 지역마다 **1% 확률**로 자연발화 발생, 인접 지역으로 **1% 확률** 확산
       - 산불이 난 지역에 있는 **모든 동물은 즉사**하며 해당 지역은 이용 불가
     - **시체 시스템**: 
-      - 사망한 개체는 **해골(💀) 이모티콘**으로 지도에 **3턴 동안** 남습니다.
-      - 3턴이 지나면 완전히 부패하여 지도에서 사라집니다.
+      - 사망한 동물은 **해골(💀) 이모티콘**으로 지도에 **3턴 동안** 남았다가 부패하여 사라집니다.
     """
     )
 
@@ -200,14 +200,12 @@ elif menu == "숲 시뮬레이션 맵":
         for i in range(5):
             for j in range(5):
                 if not st.session_state.fires[i][j]:
-                    # 자연발화 (1% 확률)
                     if random.random() < 0.01:
                         new_fires[i][j] = True
                         event_logs.append(
                             f"🔥 경고! 좌표 ({i}, {j})에 산불이 발생했습니다!"
                         )
                     else:
-                        # 인접 지역으로 확산 (1% 확률)
                         neighbors = [
                             (i - 1, j),
                             (i + 1, j),
@@ -226,17 +224,20 @@ elif menu == "숲 시뮬레이션 맵":
                                 f"🔥 산불이 인접 지역 ({i}, {j})(으)로 번졌습니다!"
                             )
 
-        # 산불 난 지역에 있는 동물은 즉사 처리
+        # 산불 난 지역에 있는 개체 즉사 처리 (달걀은 해골 없이 바로 소멸)
         for i in range(5):
             for j in range(5):
                 if not st.session_state.fires[i][j] and new_fires[i][j]:
                     for c in st.session_state.creatures_list:
                         if c["status"] == "생존" and c["x"] == i and c["y"] == j:
-                            c["status"] = "사망"
-                            c["dead_turns"] = 0
-                            event_logs.append(
-                                f"🔥 크리처({c['type']})가 산불에 휩쓸려 즉사했습니다!"
-                            )
+                            if c["type"] == "알":
+                                c["status"] = "부패됨"
+                            else:
+                                c["status"] = "사망"
+                                c["dead_turns"] = 0
+                                event_logs.append(
+                                    f"🔥 크리처({c['type']})가 산불에 휩쓸려 즉사했습니다!"
+                                )
 
         st.session_state.fires = new_fires
 
@@ -268,7 +269,6 @@ elif menu == "숲 시뮬레이션 맵":
             if c["status"] != "생존":
                 continue
 
-            # 일반 이동 (산불 지역 제외)
             if c["type"] == "늑대":
                 pid = c.get("pack_id", c["id"])
                 dx, dy = pack_moves[pid]
@@ -289,7 +289,7 @@ elif menu == "숲 시뮬레이션 맵":
             # 초식동물 풀 섭취 체크
             if c["type"] in ["토끼", "스컹크", "닭", "병아리"]:
                 if (c["x"], c["y"]) in grass_map:
-                    c["hunger_timer"] = 0  # 풀 먹음 -> 배고픔 리셋
+                    c["hunger_timer"] = 0
                 else:
                     c["hunger_timer"] += 1
                     if c["hunger_timer"] >= 3:
@@ -298,8 +298,6 @@ elif menu == "숲 시뮬레이션 맵":
                         event_logs.append(
                             f"🌾 초식동물({c['type']})이 3턴 동안 풀을 먹지 못해 굶어 죽었습니다!"
                         )
-
-            # 포식자(여우, 늑대) 사냥 기아 타이머는 상호작용 단계에서 처리
 
             # 닭 산란 (암컷만, 20% 확률)
             if c["type"] == "닭" and c["gender"] == "암컷":
@@ -527,7 +525,7 @@ elif menu == "숲 시뮬레이션 맵":
             living_foxes = [c for c in group if c["type"] == "여우" and c["status"] == "생존"]
             if living_wolves and living_foxes:
                 for w in living_wolves:
-                    w["hunger_timer"] = 0  # 포식자가 사냥감(여우)을 만났으므로 배고픔 리셋
+                    w["hunger_timer"] = 0
                     for f in living_foxes:
                         if f["status"] != "생존":
                             continue
@@ -551,14 +549,18 @@ elif menu == "숲 시뮬레이션 맵":
             ]
 
             if predators and preys:
+                eggs_broken_in_cell = 0  # 이 칸에서 이번 턴에 깨진 달걀 수 카운트 (최대 3개 제한)
                 for pred in predators:
                     if pred["status"] != "생존":
                         continue
-                    # 포식자가 사냥 시도 대상이 있으므로 배고픔 리셋
                     pred["hunger_timer"] = 0
 
                     for prey in preys:
                         if prey["status"] != "생존":
+                            continue
+
+                        # 달걀은 한 턴에 한 칸에서 최대 3개까지만 부서질 수 있음
+                        if prey["type"] == "알" and eggs_broken_in_cell >= 3:
                             continue
 
                         if prey["type"] == "토끼" and random.random() < 0.05:
@@ -569,7 +571,7 @@ elif menu == "숲 시뮬레이션 맵":
                         if prey["type"] == "스컹크":
                             sk_rand = random.random()
                             if sk_rand < 0.75:
-                                event_logs.append(f"🦨 스컹크 악취! 포식자가 도망쳤습니다.")
+                                event_logs.append("🦨 스컹크 악취! 포식자가 도망쳤습니다.")
                                 continue
                             elif sk_rand < 0.95:
                                 pass
@@ -584,18 +586,19 @@ elif menu == "숲 시뮬레이션 맵":
                         if pred["action"] >= prey["action"]:
                             prey["hp"] -= pred["atk"]
                             if prey["hp"] <= 0:
-                                prey["status"] = "사망"
-                                prey["dead_turns"] = 0
                                 if prey["type"] == "알":
+                                    prey["status"] = "부패됨"  # 해골 표시 없이 즉시 소멸
+                                    eggs_broken_in_cell += 1
                                     event_logs.append(
-                                        f"🥚 {pred['type']}이(가) 알을 먹어치웠습니다! ({pos})"
+                                        f"🥚 {pred['type']}이(가) 알을 깨뜨려 먹었습니다! ({pos}, 누적 {eggs_broken_in_cell}개)"
                                     )
                                 else:
+                                    prey["status"] = "사망"
+                                    prey["dead_turns"] = 0
                                     event_logs.append(
                                         f"⚔️ {pred['type']}이(가) {prey['type']}을(를) 사냥했습니다!"
                                     )
             else:
-                # 포식자가 이번 턴에 사냥감이나 다른 육식을 만나지 못함 -> 배고픔 증가
                 for pred in predators:
                     pred["hunger_timer"] += 1
                     if pred["hunger_timer"] >= 3:
@@ -610,7 +613,7 @@ elif menu == "숲 시뮬레이션 맵":
             if c["status"] == "사망":
                 c["dead_turns"] += 1
                 if c["dead_turns"] >= 3:
-                    c["status"] = "부패됨"  # 지도에서 완전히 제거됨
+                    c["status"] = "부패됨"
 
         st.session_state.event_logs = event_logs
 
@@ -664,7 +667,7 @@ elif menu == "숲 시뮬레이션 맵":
             if g in alive_stats[t]:
                 alive_stats[t][g] += 1
 
-    stat_cols = st.columns(len(icon_map) - 1)  # 시체 제외한 아이콘 개수
+    stat_cols = st.columns(len(icon_map) - 1)
     idx = 0
     for t_name, t_icon in icon_map.items():
         if t_name == "시체":
