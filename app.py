@@ -153,10 +153,10 @@ if menu == "크리처 도감":
     - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 / 우두머리 결투 / 여우 사냥
     - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 75% 도망, 20% 변화없음, 5% 포식자 즉사
     - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 산란
-      - **알**: **바로 다음 턴**에 병아리로 부화
-      - **병아리**: **3턴 후** 닭으로 성장
+      - **알**: 바로 다음 턴에 병아리로 부화
+      - **병아리**: 3턴 후 닭으로 성장
     - 🔥 **산불 시스템**: 
-      - 각 지역마다 매턴 **0.1% 확률**로 자연발화 발생
+      - 각 지역마다 매턴 **1% 확률**로 자연발화 발생
       - 매턴 인접 지역으로 **1% 확률**로 산불 번짐
       - 산불이 난 지역은 **이용 불가(진입 불가)**
       - 산불 발생 직전 해당 칸에 있던 개체는 **HP 10 피해**
@@ -189,8 +189,8 @@ elif menu == "숲 시뮬레이션 맵":
         for i in range(5):
             for j in range(5):
                 if not st.session_state.fires[i][j]:
-                    # 1. 자연발화 (0.1% 확률)
-                    if random.random() < 0.001:
+                    # 1. 자연발화 (1% 확률로 변경)
+                    if random.random() < 0.01:
                         new_fires[i][j] = True
                         event_logs.append(
                             f"🔥 경고! 좌표 ({i}, {j})에 산불이 발생했습니다!"
@@ -263,16 +263,13 @@ elif menu == "숲 시뮬레이션 맵":
                 if not st.session_state.fires[nx][ny]:
                     c["x"], c["y"] = nx, ny
             elif c["type"] != "알":
-                # 최대 5번 시도하여 산불이 안 난 빈 칸이나 안전한 칸으로 이동
                 moves = [(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)]
                 random.shuffle(moves)
-                moved = False
                 for dx, dy in moves:
                     nx = max(0, min(4, c["x"] + dx))
                     ny = max(0, min(4, c["y"] + dy))
                     if not st.session_state.fires[nx][ny]:
                         c["x"], c["y"] = nx, ny
-                        moved = True
                         break
 
             # 닭 산란 (암컷만, 20% 확률)
@@ -303,7 +300,7 @@ elif menu == "숲 시뮬레이션 맵":
             # 알 부화 처리 (바로 다음 턴에 병아리로 부화)
             elif c["type"] == "알":
                 c["age"] += 1
-                if c["age"] >= 1:  # 1턴 후 바로 부화
+                if c["age"] >= 1:
                     c["type"] = "병아리"
                     c["hp"] = 10
                     c["action"] = 3
@@ -317,7 +314,7 @@ elif menu == "숲 시뮬레이션 맵":
             # 병아리 성장 (3턴 후 닭으로 성장)
             elif c["type"] == "병아리":
                 c["age"] += 1
-                if c["age"] >= 3:  # 3턴 후 닭으로 성장
+                if c["age"] >= 3:
                     c["type"] = "닭"
                     c["hp"] = 20
                     c["action"] = 5
@@ -337,7 +334,6 @@ elif menu == "숲 시뮬레이션 맵":
                 positions_map[pos_key].append(c)
 
         for pos, group in positions_map.items():
-            # 산불 난 지역에서는 상호작용(전투/번식) 불가
             if st.session_state.fires[pos[0]][pos[1]]:
                 continue
 
@@ -553,7 +549,7 @@ elif menu == "숲 시뮬레이션 맵":
 
         st.session_state.event_logs = event_logs
 
-    # 5x5 숲 지도 시각화 (산불 난 곳은 🔥로 표시)
+    # 5x5 숲 지도 시각화
     display_grid = [["" for _ in range(5)] for _ in range(5)]
     for i in range(5):
         for j in range(5):
@@ -564,7 +560,6 @@ elif menu == "숲 시뮬레이션 맵":
         if c["status"] == "생존":
             x = max(0, min(4, c["x"]))
             y = max(0, min(4, c["y"]))
-            # 산불이 난 칸이 아닐 때만 아이콘 표시
             if not st.session_state.fires[x][y]:
                 icon = get_creature_icon(c)
                 if display_grid[x][y] == "":
