@@ -6,7 +6,7 @@ st.set_page_config(
     page_title="생태계 크리처 시뮬레이터", page_icon="🐾", layout="centered"
 )
 
-# 세션 상태 초기화 (맵 크기를 한눈에 보기 좋은 5x5로 조정)
+# 세션 상태 초기화 (한눈에 들어오는 5x5 맵)
 if "grid_size" not in st.session_state:
     st.session_state.grid_size = 5
     st.session_state.creatures_list = []
@@ -93,7 +93,7 @@ if "grid_size" not in st.session_state:
         cid += 1
 
 st.title("🌲 야생 숲 생태계 시뮬레이터")
-st.markdown("한눈에 들어오는 5×5 숲 지도에서 크리처들의 움직임을 확인하세요!")
+st.markdown("5×5 숲 지도에서 크리처들의 성별과 특성 기반 상호작용을 관찰하세요!")
 
 menu = st.sidebar.selectbox("메뉴 선택", ["숲 시뮬레이션 맵", "크리처 도감"])
 
@@ -128,7 +128,7 @@ elif menu == "숲 시뮬레이션 맵":
 
     event_logs = []
 
-    # 1. 이동 및 개별 특성 처리 (5x5 범위 제한: 0~4)
+    # 1. 이동 및 개별 특성 처리 (안전한 5x5 범위: 0~4)
     for c in living_creatures:
       if c["status"] != "생존":
         continue
@@ -190,6 +190,7 @@ elif menu == "숲 시뮬레이션 맵":
         positions_map[pos_key].append(c)
 
     for pos, group in positions_map.items():
+      # 번식 체크
       types_in_group = set(c["type"] for c in group)
       for t_name in types_in_group:
         if t_name in ["토끼", "여우", "늑대", "스컹크"]:
@@ -213,7 +214,7 @@ elif menu == "숲 시뮬레이션 맵":
                     "status": "생존",
                     "age": 0,
                 })
-              event_logs.append(f"🐰 토끼 번식! +{inc}마리")
+              event_logs.append(f"🐰 토끼 번식 성공! +{inc}마리")
 
             elif t_name == "여우" and random.random() < 0.6:
               inc = random.randint(2, 3)
@@ -230,7 +231,7 @@ elif menu == "숲 시뮬레이션 맵":
                     "status": "생존",
                     "age": 0,
                 })
-              event_logs.append(f"🦊 여우 번식! +{inc}마리")
+              event_logs.append(f"🦊 여우 번식 성공! +{inc}마리")
 
             elif t_name == "늑대" and random.random() < 0.5:
               inc = random.randint(2, 6)
@@ -247,7 +248,7 @@ elif menu == "숲 시뮬레이션 맵":
                     "status": "생존",
                     "age": 0,
                 })
-              event_logs.append(f"🐺 늑대 번식! +{inc}마리")
+              event_logs.append(f"🐺 늑대 번식 성공! +{inc}마리")
 
             elif t_name == "스컹크" and random.random() < 0.5:
               inc = random.randint(2, 3)
@@ -264,7 +265,7 @@ elif menu == "숲 시뮬레이션 맵":
                     "status": "생존",
                     "age": 0,
                 })
-              event_logs.append(f"🦨 스컹크 번식! +{inc}마리")
+              event_logs.append(f"🦨 스컹크 번식 성공! +{inc}마리")
 
       # 전투 처리
       predators = [c for c in group if c["type"] in ["여우", "늑대"]]
@@ -316,7 +317,7 @@ elif menu == "숲 시뮬레이션 맵":
 
     st.session_state.event_logs = event_logs
 
-  # 5x5 컴팩트 격자 맵 시각화
+  # 5x5 컴팩트 격자 맵 시각화 (안전하게 0~4 범위 내에서만 출력)
   icon_map = {
       "토끼": "🐰",
       "여우": "🦊",
@@ -331,7 +332,8 @@ elif menu == "숲 시뮬레이션 맵":
   for c in st.session_state.creatures_list:
     if c["status"] == "생존":
       icon = icon_map.get(c["type"], "🐾")
-      x, y = c["x"], c["y"]
+      x = max(0, min(4, c["x"]))
+      y = max(0, min(4, c["y"]))
       if display_grid[x][y] == "":
         display_grid[x][y] = icon
       else:
