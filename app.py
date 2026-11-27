@@ -100,12 +100,11 @@ if "grid_size" not in st.session_state:
 
 st.title("🌲 야생 숲 생태계 시뮬레이터")
 st.markdown(
-    "5×5 숲 지도에서 크리처들의 성별(♀/♂)과 신생 개체(NEW)를 관찰하세요!"
+    "5×5 숲 지도에서 크리처들의 성별(♀/♂)과 신생 개체(✨)를 관찰하세요!"
 )
 
 menu = st.sidebar.selectbox("메뉴 선택", ["숲 시뮬레이션 맵", "크리처 도감"])
 
-# 지도 표시에 쓰일 크리처별 아이콘 매핑 (NEW 및 성별 표시 포함)
 icon_map = {
     "토끼": "🐰",
     "여우": "🦊",
@@ -134,7 +133,7 @@ def get_creature_icon(c):
     elif c_type == "닭":
         base = "🐔♀" if gender == "암컷" else "🐔♂"
     elif c_type == "병아리":
-        base = "🐥"
+        base = "🐥♀" if gender == "암컷" else "🐥♂"
     elif c_type == "알":
         base = "🥚"
     else:
@@ -149,7 +148,7 @@ if menu == "크리처 도감":
         """
     - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 30% (5~10마리 증가)
     - **여우**: HP 40, 공격력 20, 행동력 30 (육식) / 20% 사냥감 추적 / 암수 한쌍 60% (2~3마리 증가)
-    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 및 동행 / 무리끼리 만나면 우두머리 결투
+    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 / 무리끼리 만나면 우두머리 결투 / **여우와 만나면 사냥**
     - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 70% 도망, 20% 변화없음, 10% 즉사
     - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
     - **✨ 표시**: 새로 태어난 신생 개체(NEW)
@@ -168,7 +167,6 @@ elif menu == "숲 시뮬레이션 맵":
         st.rerun()
 
     if step_btn:
-        # 턴이 시작될 때 기존에 있던 생존 개체들의 'is_new' 플래그를 False로 해제
         for c in st.session_state.creatures_list:
             if c["status"] == "생존":
                 c["is_new"] = False
@@ -180,7 +178,7 @@ elif menu == "숲 시뮬레이션 맵":
 
         event_logs = []
 
-        # 늑대 무리(pack_id)별 이동 방향 미리 결정
+        # 늑대 무리(pack_id)별 이동 방향
         pack_moves = {}
         for c in living_creatures:
             if c["type"] == "늑대":
@@ -190,7 +188,7 @@ elif menu == "숲 시뮬레이션 맵":
                         [(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)]
                     )
 
-        # 1. 이동 및 개별 특성 처리 (5x5 범위: 0~4)
+        # 1. 이동 및 성장/부화 처리
         for c in living_creatures:
             if c["status"] != "생존":
                 continue
@@ -200,7 +198,7 @@ elif menu == "숲 시뮬레이션 맵":
                 dx, dy = pack_moves[pid]
                 c["x"] = max(0, min(4, c["x"] + dx))
                 c["y"] = max(0, min(4, c["y"] + dy))
-            else:
+            elif c["type"] != "알":  # 알은 움직이지 않음
                 dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])
                 c["x"] = max(0, min(4, c["x"] + dx))
                 c["y"] = max(0, min(4, c["y"] + dy))
@@ -227,33 +225,33 @@ elif menu == "숲 시뮬레이션 맵":
                         f"🐔 암컷 닭이 ({c['x']}, {c['y']})에 알 {egg_count}개를 산란했습니다!"
                     )
 
-            # 알 부화 (3턴)
-            if c["type"] == "알":
+            # 알 부화 (3턴 후 병아리로 변하며 성별 즉시 부여)
+            elif c["type"] == "알":
                 c["age"] += 1
                 if c["age"] >= 3:
                     c["type"] = "병아리"
                     c["hp"] = 10
                     c["action"] = 3
+                    c["age"] = 0
+                    c["gender"] = random.choice(["암컷", "수컷"])
                     c["is_new"] = True
                     event_logs.append(
-                        f"🥚 알이 부화하여 병아리가 되었습니다! ({c['x']}, {c['y']})"
+                        f"🥚 알이 부화하여 병아리({c['gender']})가 되었습니다! ({c['x']}, {c['y']})"
                     )
 
-            # 병아리 성장 (5턴 후 닭, 성별 랜덤 부여)
-            if c["type"] == "병아리" and c["age"] > 0:  # 방금 부화한 알 제외
+            # 병아리 성장 (5턴 후 닭)
+            elif c["type"] == "병아리":
                 c["age"] += 1
                 if c["age"] >= 5:
                     c["type"] = "닭"
                     c["hp"] = 20
                     c["action"] = 5
-                    gender_choice = random.choice(["암컷", "수컷"])
-                    c["gender"] = gender_choice
                     c["is_new"] = True
                     event_logs.append(
-                        f"🐥 병아리가 성장하여 ({c['x']}, {c['y']}) 닭({gender_choice})이 되었습니다!"
+                        f"🐥 병아리가 성장하여 ({c['x']}, {c['y']}) 닭({c['gender']})이 되었습니다!"
                     )
 
-        # 2. 같은 칸 상호작용 (무리 결성/싸움, 번식, 사냥)
+        # 2. 같은 칸 상호작용
         positions_map = {}
         for c in st.session_state.creatures_list:
             if c["status"] == "생존":
@@ -263,6 +261,7 @@ elif menu == "숲 시뮬레이션 맵":
                 positions_map[pos_key].append(c)
 
         for pos, group in positions_map.items():
+            # 늑대 무리 결성 및 무리 간 우두머리 싸움
             wolves = [c for c in group if c["type"] == "늑대" and c["status"] == "생존"]
             if len(wolves) >= 2:
                 packs = {}
@@ -330,16 +329,13 @@ elif menu == "숲 시뮬레이션 맵":
                     has_male = any(c["gender"] == "수컷" for c in sub_group)
 
                     if has_female and has_male:
-                        # 토끼 번식 30%
                         if t_name == "토끼" and random.random() < 0.30:
                             inc = random.randint(5, 10)
                             for _ in range(inc):
                                 st.session_state.creatures_list.append({
                                     "id": len(st.session_state.creatures_list) + 1,
                                     "type": "토끼",
-                                    "x": random.randint(
-                                        0, 4
-                                    ),  # 새끼들은 랜덤 위치에서 스폰
+                                    "x": random.randint(0, 4),
                                     "y": random.randint(0, 4),
                                     "hp": 30,
                                     "atk": 5,
@@ -349,9 +345,7 @@ elif menu == "숲 시뮬레이션 맵":
                                     "age": 0,
                                     "is_new": True,
                                 })
-                            event_logs.append(
-                                f"🐰 토끼 번식 성공! 새끼 {inc}마리가 숲 곳곳에 스폰되었습니다."
-                            )
+                            event_logs.append(f"🐰 토끼 번식 성공! +{inc}마리")
 
                         elif t_name == "여우" and random.random() < 0.6:
                             inc = random.randint(2, 3)
@@ -369,9 +363,7 @@ elif menu == "숲 시뮬레이션 맵":
                                     "age": 0,
                                     "is_new": True,
                                 })
-                            event_logs.append(
-                                f"🦊 여우 번식 성공! 새끼 {inc}마리가 숲 곳곳에 스폰되었습니다."
-                            )
+                            event_logs.append(f"🦊 여우 번식 성공! +{inc}마리")
 
                         elif t_name == "늑대" and random.random() < 0.5:
                             inc = random.randint(2, 6)
@@ -382,9 +374,7 @@ elif menu == "숲 시뮬레이션 맵":
                                 st.session_state.creatures_list.append({
                                     "id": len(st.session_state.creatures_list) + 1,
                                     "type": "늑대",
-                                    "x": random.randint(
-                                        0, 4
-                                    ),  # 늑대 새끼도 랜덤 위치 스폰
+                                    "x": random.randint(0, 4),
                                     "y": random.randint(0, 4),
                                     "hp": 60,
                                     "atk": 30,
@@ -395,9 +385,7 @@ elif menu == "숲 시뮬레이션 맵":
                                     "pack_id": parent_pack_id,
                                     "is_new": True,
                                 })
-                            event_logs.append(
-                                f"🐺 늑대 번식 성공! 새끼 {inc}마리가 숲 곳곳에 스폰되었습니다."
-                            )
+                            event_logs.append(f"🐺 늑대 번식 성공! +{inc}마리")
 
                         elif t_name == "스컹크" and random.random() < 0.5:
                             inc = random.randint(2, 3)
@@ -415,11 +403,23 @@ elif menu == "숲 시뮬레이션 맵":
                                     "age": 0,
                                     "is_new": True,
                                 })
-                            event_logs.append(
-                                f"🦨 스컹크 번식 성공! 새끼 {inc}마리가 숲 곳곳에 스폰되었습니다."
-                            )
+                            event_logs.append(f"🦨 스컹크 번식 성공! +{inc}마리")
 
-            # 전투 처리
+            # 육식동물끼리의 전투 (늑대 vs 여우)
+            living_wolves = [c for c in group if c["type"] == "늑대" and c["status"] == "생존"]
+            living_foxes = [c for c in group if c["type"] == "여우" and c["status"] == "생존"]
+            if living_wolves and living_foxes:
+                for w in living_wolves:
+                    for f in living_foxes:
+                        if f["status"] != "생존":
+                            continue
+                        # 늑대 행동력(60) > 여우 행동력(30) 이므로 늑대가 선공
+                        f["hp"] -= w["atk"]
+                        if f["hp"] <= 0:
+                            f["status"] = "사망"
+                            event_logs.append(f"🐺⚔️🦊 늑대가 여우를 공격해 사냥했습니다! ({pos})")
+
+            # 포식자 vs 초식/알 사냥 처리
             predators = [
                 c
                 for c in group
@@ -460,13 +460,18 @@ elif menu == "숲 시뮬레이션 맵":
                             prey["hp"] -= pred["atk"]
                             if prey["hp"] <= 0:
                                 prey["status"] = "사망"
-                                event_logs.append(
-                                    f"⚔️ {pred['type']}이(가) {prey['type']}을(를) 사냥했습니다!"
-                                )
+                                if prey["type"] == "알":
+                                    event_logs.append(
+                                        f"🥚 {pred['type']}이(가) 알을 먹어치웠습니다! ({pos})"
+                                    )
+                                else:
+                                    event_logs.append(
+                                        f"⚔️ {pred['type']}이(가) {prey['type']}을(를) 사냥했습니다!"
+                                    )
 
         st.session_state.event_logs = event_logs
 
-    # 5x5 숲 지도 시각화 (신생 개체 ✨ 표시 반영)
+    # 5x5 숲 지도 시각화
     display_grid = [["" for _ in range(5)] for _ in range(5)]
     for c in st.session_state.creatures_list:
         if c["status"] == "생존":
@@ -491,12 +496,12 @@ elif menu == "숲 시뮬레이션 맵":
     # 이벤트 로그
     st.markdown("### 📜 이번 턴 이벤트 로그")
     if "event_logs" in st.session_state and st.session_state.event_logs:
-        for log in st.session_state.event_logs[-5:]:
+        for log in st.session_state.event_logs[-7:]:
             st.write(log)
     else:
         st.info("상단의 '1턴 진행하기' 버튼을 눌러보세요!")
 
-    # 하단 생존 개체수 현황 (암컷/수컷 상세 표시)
+    # 하단 생존 개체수 현황
     st.markdown("### 📊 생존 개체수 현황 (암수 상세)")
     alive_stats = {}
     for c in st.session_state.creatures_list:
