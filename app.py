@@ -44,13 +44,14 @@ if "grid_size" not in st.session_state:
         })
         cid += 1
 
-    # 늑대 (암컷 2, 수컷 2)
-    for g in ["암컷"] * 2 + ["수컷"] * 2:
+    # 늑대 (암컷 2, 수컷 2 - 늑대는 항상 무리로 함께 이동하기 위한 리더 위치 지정)
+    wolf_x, wolf_y = random.randint(0, 4), random.randint(0, 4)
+    for g in ["암컷", "암컷", "수컷", "수컷"]:
         st.session_state.creatures_list.append({
             "id": cid,
             "type": "늑대",
-            "x": random.randint(0, 4),
-            "y": random.randint(0, 4),
+            "x": wolf_x,
+            "y": wolf_y,
             "hp": 60,
             "atk": 30,
             "action": 60,
@@ -113,9 +114,9 @@ if menu == "크리처 도감":
       """
     - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 70% (5~10마리 증가)
     - **여우**: HP 40, 공격력 20, 행동력 30 (육식) / 20% 사냥감 추적 / 암수 한쌍 60% (2~3마리 증가)
-    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 우두머리 결투 (패배 시 사망) / 암수 한쌍 50% (2~6마리 증가)
-    - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 70% 도망, 20% 변화없음, 10% 즉사 / 암수 한쌍 50% (2~3마리 증가)
-    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암탉 1마리만 있어도 매턴 50% 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
+    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / **항상 무리로 함께 이동** / 우두머리 결투 (패배 시 사망)
+    - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 70% 도망, 20% 변화없음, 10% 즉사
+    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / **암컷만** 5% 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
     """
   )
 
@@ -138,18 +139,33 @@ elif menu == "숲 시뮬레이션 맵":
 
     event_logs = []
 
+    # 늑대 무리는 한 번에 같이 이동하도록 대표 이동 방향 결정
+    wolf_dx, wolf_dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])
+    first_wolf_moved = False
+
     # 1. 이동 및 특성 처리 (5x5 범위: 0~4)
     for c in living_creatures:
       if c["status"] != "생존":
         continue
 
-      dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])
-      c["x"] = max(0, min(4, c["x"] + dx))
-      c["y"] = max(0, min(4, c["y"] + dy))
+      if c["type"] == "늑대":
+        # 늑대는 무리가 항상 같이 다님
+        if not first_wolf_moved:
+          c["x"] = max(0, min(4, c["x"] + wolf_dx))
+          c["y"] = max(0, min(4, c["y"] + wolf_dy))
+          shared_wolf_x, shared_wolf_y = c["x"], c["y"]
+          first_wolf_moved = True
+        else:
+          c["x"] = shared_wolf_x
+          c["y"] = shared_wolf_y
+      else:
+        dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])
+        c["x"] = max(0, min(4, c["x"] + dx))
+        c["y"] = max(0, min(4, c["y"] + dy))
 
-      # 닭 산란
+      # 닭 산란 (암컷만, 5% 확률)
       if c["type"] == "닭" and c["gender"] == "암컷":
-        if random.random() < 0.5:
+        if random.random() < 0.05:
           egg_count = random.randint(3, 10)
           for _ in range(egg_count):
             st.session_state.creatures_list.append({
@@ -165,10 +181,10 @@ elif menu == "숲 시뮬레이션 맵":
                 "age": 0,
             })
           event_logs.append(
-              f"🐔 닭이 ({c['x']}, {c['y']})에 알 {egg_count}개를 산란했습니다!"
+              f"🐔 암컷 닭이 ({c['x']}, {c['y']})에 알 {egg_count}개를 산란했습니다!"
           )
 
-      # 알 부화
+      # 알 부화 (3턴)
       if c["type"] == "알":
         c["age"] += 1
         if c["age"] >= 3:
@@ -179,15 +195,18 @@ elif menu == "숲 시뮬레이션 맵":
               f"🥚 알이 부화하여 병아리가 되었습니다! ({c['x']}, {c['y']})"
           )
 
-      # 병아리 성장
+      # 병아리 성장 (5턴)
       if c["type"] == "병아리":
         c["age"] += 1
         if c["age"] >= 5:
           c["type"] = "닭"
           c["hp"] = 20
           c["action"] = 5
+          gender_choice = random.choice(["암컷", "수컷"])
+          c["gender"] = gender_choice
           event_logs.append(
-              f"🐥 병아리가 성장하여 닭이 되었습니다! ({c['x']}, {c['y']})"
+              f"🐥 병아리가 성장하여 ({c['x']}, {c['y']})"
+              f" 닭({gender_choice})이 되었습니다!"
           )
 
     # 2. 같은 칸 상호작용 (번식 및 전투)
@@ -326,7 +345,7 @@ elif menu == "숲 시뮬레이션 맵":
 
     st.session_state.event_logs = event_logs
 
-  # 5x5 숲 지도 시각화 (안전한 스트림릿 컨테이너 및 컬럼 활용)
+  # 5x5 숲 지도 시각화
   display_grid = [["" for _ in range(5)] for _ in range(5)]
   for c in st.session_state.creatures_list:
     if c["status"] == "생존":
@@ -338,7 +357,6 @@ elif menu == "숲 시뮬레이션 맵":
       else:
         display_grid[x][y] += f" {icon}"
 
-  # 5행 5열로 숲 구역 표현
   st.markdown("### 🗺️ 숲 구역 지도")
   for i in range(5):
     cols = st.columns(5)
@@ -357,7 +375,7 @@ elif menu == "숲 시뮬레이션 맵":
   else:
     st.info("상단의 '1턴 진행하기' 버튼을 눌러보세요!")
 
-  # 하단 생존 개체수 현황 (암컷/수컷 상세 표시)
+  # 하단 생존 개체수 현황 (잘리지 않도록 마크다운 텍스트로 한눈에 출력)
   st.markdown("### 📊 생존 개체수 현황 (암수 상세)")
   alive_stats = {}
   for c in st.session_state.creatures_list:
@@ -369,19 +387,17 @@ elif menu == "숲 시뮬레이션 맵":
       if g in alive_stats[t]:
         alive_stats[t][g] += 1
 
-  cols = st.columns(len(icon_map))
+  stat_cols = st.columns(len(icon_map))
   idx = 0
   for t_name, t_icon in icon_map.items():
-    if idx < len(cols):
-      with cols[idx]:
+    if idx < len(stat_cols):
+      with stat_cols[idx]:
         stats = alive_stats.get(
             t_name, {"암컷": 0, "수컷": 0, "중성": 0}
         )
+        st.markdown(f"**{t_icon} {t_name}**")
         if t_name in ["알"]:
-          st.metric(label=f"{t_icon} {t_name}", value=f"{stats['중성']}개")
+          st.text(f"{stats['중성']}개")
         else:
-          st.metric(
-              label=f"{t_icon} {t_name}",
-              value=f"♀{stats['암컷']} / ♂{stats['수컷']}",
-          )
+          st.text(f"♀{stats['암컷']} / ♂{stats['수컷']}")
       idx += 1
