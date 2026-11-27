@@ -93,9 +93,19 @@ if "grid_size" not in st.session_state:
         cid += 1
 
 st.title("🌲 야생 숲 생태계 시뮬레이터")
-st.markdown("격자선 없는 깔끔한 숲 지역 지도에서 크리처들을 관찰하세요!")
+st.markdown("5×5 숲 지도에서 크리처들의 움직임을 관찰하세요!")
 
 menu = st.sidebar.selectbox("메뉴 선택", ["숲 시뮬레이션 맵", "크리처 도감"])
+
+icon_map = {
+    "토끼": "🐰",
+    "여우": "🦊",
+    "늑대": "🐺",
+    "스컹크": "🦨",
+    "닭": "🐔",
+    "병아리": "🐥",
+    "알": "🥚",
+}
 
 if menu == "크리처 도감":
   st.subheader("📖 크리처 설정 가이드")
@@ -282,7 +292,7 @@ elif menu == "숲 시뮬레이션 맵":
               event_logs.append(f"🐰 토끼가 도망쳤습니다!")
               continue
 
-            if prey["type"] == "С컹크" or prey["type"] == "스컹크":
+            if prey["type"] == "스컹크":
               sk_rand = random.random()
               if sk_rand < 0.7:
                 event_logs.append(f"🦨 스컹크 독가스! 포식자가 도망쳤습니다.")
@@ -316,17 +326,7 @@ elif menu == "숲 시뮬레이션 맵":
 
     st.session_state.event_logs = event_logs
 
-  # 5x5 깔끔한 숲 지도 시각화 (HTML/CSS로 테이블 선 제거 및 지역 배경 적용)
-  icon_map = {
-      "토끼": "🐰",
-      "여우": "🦊",
-      "늑대": "🐺",
-      "스컹크": "🦨",
-      "닭": "🐔",
-      "병아리": "🐥",
-      "알": "🥚",
-  }
-
+  # 5x5 숲 지도 시각화 (안전한 스트림릿 컨테이너 및 컬럼 활용)
   display_grid = [["" for _ in range(5)] for _ in range(5)]
   for c in st.session_state.creatures_list:
     if c["status"] == "생존":
@@ -338,35 +338,16 @@ elif menu == "숲 시뮬레이션 맵":
       else:
         display_grid[x][y] += f" {icon}"
 
-  # HTML을 이용해 테두리선 없는 부드러운 숲 배경 지도 만들기
-  html_map = """
-    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 20px;">
-    """
+  # 5행 5열로 숲 구역 표현
+  st.markdown("### 🗺️ 숲 구역 지도")
   for i in range(5):
+    cols = st.columns(5)
     for j in range(5):
-      cell_content = display_grid[i][j]
-      if cell_content == "":
-        cell_content = "<span style='color: #a8d5ba;'>🌳</span>"
-
-      html_map += f"""
-        <div style="
-            background-color: #eaf4ed; 
-            border-radius: 12px; 
-            padding: 15px 5px; 
-            text-align: center; 
-            font-size: 20px;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        ">
-            {cell_content}
-        </div>
-        """
-  html_map += "</div>"
-
-  st.markdown(html_map, unsafe_allow_html=True)
+      with cols[j]:
+        content = display_grid[i][j]
+        if content == "":
+          content = "🌲"
+        st.info(content)
 
   # 이벤트 로그
   st.markdown("### 📜 이번 턴 이벤트 로그")
