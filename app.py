@@ -100,7 +100,18 @@ st.markdown(
 
 menu = st.sidebar.selectbox("메뉴 선택", ["숲 시뮬레이션 맵", "크리처 도감"])
 
-# 지도 표시에 쓰일 크리처별 아이콘 (성별에 따라 다르게 표시)
+# 지도 표시에 쓰일 크리처별 아이콘 매핑 (NameError 방지를 위해 상단 배치)
+icon_map = {
+    "토끼": "🐰",
+    "여우": "🦊",
+    "늑대": "🐺",
+    "스컹크": "🦨",
+    "닭": "🐔",
+    "병아리": "🐥",
+    "알": "🥚",
+}
+
+# 성별에 따른 아이콘 반환 함수
 def get_creature_icon(c_type, gender):
     if c_type == "토끼":
         return "🐰♀" if gender == "암컷" else "🐰♂"
@@ -122,11 +133,11 @@ if menu == "크리처 도감":
     st.subheader("📖 크리처 설정 가이드")
     st.markdown(
         """
-    - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 **30%** (5~10마리 증가)
+    - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 30% (5~10마리 증가)
     - **여우**: HP 40, 공격력 20, 행동력 30 (육식) / 20% 사냥감 추적 / 암수 한쌍 60% (2~3마리 증가)
     - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 및 동행 / 무리끼리 만나면 우두머리 결투 (패배 우두머리 사망 후 무리 흡수)
     - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 70% 도망, 20% 변화없음, 10% 즉사
-    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / **암컷만** **20%** 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
+    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
     """
     )
 
@@ -229,7 +240,6 @@ elif menu == "숲 시뮬레이션 맵":
                 positions_map[pos_key].append(c)
 
         for pos, group in positions_map.items():
-            # 늑대 무리 결성 및 무리 간 우두머리 싸움
             wolves = [c for c in group if c["type"] == "늑대" and c["status"] == "생존"]
             if len(wolves) >= 2:
                 packs = {}
@@ -297,7 +307,6 @@ elif menu == "숲 시뮬레이션 맵":
                     has_male = any(c["gender"] == "수컷" for c in sub_group)
 
                     if has_female and has_male:
-                        # 토끼 번식 확률 30%로 변경
                         if t_name == "토끼" and random.random() < 0.30:
                             inc = random.randint(5, 10)
                             for _ in range(inc):
