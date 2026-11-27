@@ -46,7 +46,7 @@ if "grid_size" not in st.session_state:
         })
         cid += 1
 
-    # 늑대 (암컷 2, 수컷 2 - 각자 흩어져서 시작)
+    # 늑대 (암컷 2, 수컷 2)
     for g in ["암컷", "암컷", "수컷", "수컷"]:
         st.session_state.creatures_list.append({
             "id": cid,
@@ -148,9 +148,9 @@ if menu == "크리처 도감":
         """
     - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 30% (5~10마리 증가)
     - **여우**: HP 40, 공격력 20, 행동력 30 (육식) / 20% 사냥감 추적 / 암수 한쌍 60% (2~3마리 증가)
-    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 / 무리끼리 만나면 우두머리 결투 / **여우와 만나면 사냥**
+    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 / 우두머리 결투 / 여우 사냥
     - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 70% 도망, 20% 변화없음, 10% 즉사
-    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
+    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 3~10개 산란 (**알은 3턴 후 부화**)
     - **✨ 표시**: 새로 태어난 신생 개체(NEW)
     """
     )
@@ -178,7 +178,7 @@ elif menu == "숲 시뮬레이션 맵":
 
         event_logs = []
 
-        # 늑대 무리(pack_id)별 이동 방향
+        # 늑대 무리 이동 방향
         pack_moves = {}
         for c in living_creatures:
             if c["type"] == "늑대":
@@ -193,12 +193,13 @@ elif menu == "숲 시뮬레이션 맵":
             if c["status"] != "생존":
                 continue
 
+            # 일반 이동
             if c["type"] == "늑대":
                 pid = c.get("pack_id", c["id"])
                 dx, dy = pack_moves[pid]
                 c["x"] = max(0, min(4, c["x"] + dx))
                 c["y"] = max(0, min(4, c["y"] + dy))
-            elif c["type"] != "알":  # 알은 움직이지 않음
+            elif c["type"] != "알":
                 dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])
                 c["x"] = max(0, min(4, c["x"] + dx))
                 c["y"] = max(0, min(4, c["y"] + dy))
@@ -225,7 +226,7 @@ elif menu == "숲 시뮬레이션 맵":
                         f"🐔 암컷 닭이 ({c['x']}, {c['y']})에 알 {egg_count}개를 산란했습니다!"
                     )
 
-            # 알 부화 (3턴 후 병아리로 변하며 성별 즉시 부여)
+            # 알 부화 처리 (매턴 age가 1씩 증가하며, 3턴이 되면 병아리로 변환)
             elif c["type"] == "알":
                 c["age"] += 1
                 if c["age"] >= 3:
@@ -239,13 +240,14 @@ elif menu == "숲 시뮬레이션 맵":
                         f"🥚 알이 부화하여 병아리({c['gender']})가 되었습니다! ({c['x']}, {c['y']})"
                     )
 
-            # 병아리 성장 (5턴 후 닭)
+            # 병아리 성장 (5턴 후 닭으로 성장)
             elif c["type"] == "병아리":
                 c["age"] += 1
                 if c["age"] >= 5:
                     c["type"] = "닭"
                     c["hp"] = 20
                     c["action"] = 5
+                    c["age"] = 0
                     c["is_new"] = True
                     event_logs.append(
                         f"🐥 병아리가 성장하여 ({c['x']}, {c['y']}) 닭({c['gender']})이 되었습니다!"
@@ -261,7 +263,7 @@ elif menu == "숲 시뮬레이션 맵":
                 positions_map[pos_key].append(c)
 
         for pos, group in positions_map.items():
-            # 늑대 무리 결성 및 무리 간 우두머리 싸움
+            # 늑대 무리 결성 및 우두머리 결투
             wolves = [c for c in group if c["type"] == "늑대" and c["status"] == "생존"]
             if len(wolves) >= 2:
                 packs = {}
@@ -313,7 +315,7 @@ elif menu == "숲 시뮬레이션 맵":
                         for w in wolves:
                             w["pack_id"] = target_pid
                         event_logs.append(
-                            f"🐺 늑대들이 {pos}에서 만나 늑대 무리를 형성했습니다! (총 {len(wolves)}마리 동행)"
+                            f"🐺 늑대들이 {pos}에서 만나 늑대 무리를 형성했습니다!"
                         )
 
             # 번식 체크
@@ -413,11 +415,10 @@ elif menu == "숲 시뮬레이션 맵":
                     for f in living_foxes:
                         if f["status"] != "생존":
                             continue
-                        # 늑대 행동력(60) > 여우 행동력(30) 이므로 늑대가 선공
                         f["hp"] -= w["atk"]
                         if f["hp"] <= 0:
                             f["status"] = "사망"
-                            event_logs.append(f"🐺⚔️🦊 늑대가 여우를 공격해 사냥했습니다! ({pos})")
+                            event_logs.append(f"🐺⚔️🦊 늑대가 여우를 사냥했습니다! ({pos})")
 
             # 포식자 vs 초식/알 사냥 처리
             predators = [
