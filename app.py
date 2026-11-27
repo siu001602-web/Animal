@@ -44,7 +44,7 @@ if "grid_size" not in st.session_state:
         })
         cid += 1
 
-    # 늑대 (암컷 2, 수컷 2 - 처음엔 각자 흩어져서 시작, 고유 pack_id 부여)
+    # 늑대 (암컷 2, 수컷 2 - 각자 흩어져서 시작)
     for g in ["암컷", "암컷", "수컷", "수컷"]:
         st.session_state.creatures_list.append({
             "id": cid,
@@ -57,7 +57,7 @@ if "grid_size" not in st.session_state:
             "gender": g,
             "status": "생존",
             "age": 0,
-            "pack_id": cid,  # 처음엔 각자 1마리(솔로) 상태
+            "pack_id": cid,
         })
         cid += 1
 
@@ -94,29 +94,39 @@ if "grid_size" not in st.session_state:
         cid += 1
 
 st.title("🌲 야생 숲 생태계 시뮬레이터")
-st.markdown("5×5 숲 지도에서 크리처들의 움직임을 관찰하세요!")
+st.markdown(
+    "5×5 숲 지도에서 크리처들의 성별(♀/♂)과 움직임을 관찰하세요!"
+)
 
 menu = st.sidebar.selectbox("메뉴 선택", ["숲 시뮬레이션 맵", "크리처 도감"])
 
-icon_map = {
-    "토끼": "🐰",
-    "여우": "🦊",
-    "늑대": "🐺",
-    "스컹크": "🦨",
-    "닭": "🐔",
-    "병아리": "🐥",
-    "알": "🥚",
-}
+# 지도 표시에 쓰일 크리처별 아이콘 (성별에 따라 다르게 표시)
+def get_creature_icon(c_type, gender):
+    if c_type == "토끼":
+        return "🐰♀" if gender == "암컷" else "🐰♂"
+    elif c_type == "여우":
+        return "🦊♀" if gender == "암컷" else "🦊♂"
+    elif c_type == "늑대":
+        return "🐺♀" if gender == "암컷" else "🐺♂"
+    elif c_type == "스컹크":
+        return "🦨♀" if gender == "암컷" else "🦨♂"
+    elif c_type == "닭":
+        return "🐔♀" if gender == "암컷" else "🐔♂"
+    elif c_type == "병아리":
+        return "🐥"
+    elif c_type == "알":
+        return "🥚"
+    return "🐾"
 
 if menu == "크리처 도감":
     st.subheader("📖 크리처 설정 가이드")
     st.markdown(
         """
-    - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 70% (5~10마리 증가)
+    - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 **30%** (5~10마리 증가)
     - **여우**: HP 40, 공격력 20, 행동력 30 (육식) / 20% 사냥감 추적 / 암수 한쌍 60% (2~3마리 증가)
-    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / **만나면 무리 형성 및 동행** / **무리끼리 만나면 우두머리 결투 (패배 우두머리 사망 후 무리 흡수)** / 암수 한쌍 50% (2~6마리 증가)
+    - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 및 동행 / 무리끼리 만나면 우두머리 결투 (패배 우두머리 사망 후 무리 흡수)
     - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 70% 도망, 20% 변화없음, 10% 즉사
-    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / **암컷만** 5% 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
+    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / **암컷만** **20%** 확률로 알 3~10개 산란 (알 HP 5, 3턴 후 부화)
     """
     )
 
@@ -139,7 +149,7 @@ elif menu == "숲 시뮬레이션 맵":
 
         event_logs = []
 
-        # 늑대 무리(pack_id)별 이동 방향 미리 결정 (같은 무리는 같은 방향으로 함께 이동)
+        # 늑대 무리(pack_id)별 이동 방향 미리 결정
         pack_moves = {}
         for c in living_creatures:
             if c["type"] == "늑대":
@@ -164,9 +174,9 @@ elif menu == "숲 시뮬레이션 맵":
                 c["x"] = max(0, min(4, c["x"] + dx))
                 c["y"] = max(0, min(4, c["y"] + dy))
 
-            # 닭 산란 (암컷만, 5% 확률)
+            # 닭 산란 (암컷만, 20% 확률)
             if c["type"] == "닭" and c["gender"] == "암컷":
-                if random.random() < 0.05:
+                if random.random() < 0.20:
                     egg_count = random.randint(3, 10)
                     for _ in range(egg_count):
                         st.session_state.creatures_list.append({
@@ -196,7 +206,7 @@ elif menu == "숲 시뮬레이션 맵":
                         f"🥚 알이 부화하여 병아리가 되었습니다! ({c['x']}, {c['y']})"
                     )
 
-            # 병아리 성장 (5턴)
+            # 병아리 성장 (5턴 후 닭, 성별 랜덤 부여)
             if c["type"] == "병아리":
                 c["age"] += 1
                 if c["age"] >= 5:
@@ -219,10 +229,9 @@ elif menu == "숲 시뮬레이션 맵":
                 positions_map[pos_key].append(c)
 
         for pos, group in positions_map.items():
-            # [늑대 전용 로직] 무리 결성 및 무리 간 우두머리 싸움
+            # 늑대 무리 결성 및 무리 간 우두머리 싸움
             wolves = [c for c in group if c["type"] == "늑대" and c["status"] == "생존"]
             if len(wolves) >= 2:
-                # 현재 칸에 있는 늑대들을 pack_id별로 그룹화
                 packs = {}
                 for w in wolves:
                     pid = w.get("pack_id", w["id"])
@@ -230,10 +239,8 @@ elif menu == "숲 시뮬레이션 맵":
                         packs[pid] = []
                     packs[pid].append(w)
 
-                # 서로 다른 소속(pack_id)의 늑대들이 만난 경우
                 if len(packs) >= 2:
                     pack_ids = list(packs.keys())
-                    # 전체 늑대 수에서 각 무리의 실제 전체 크기 계산
                     all_living_wolves = [
                         w
                         for w in st.session_state.creatures_list
@@ -247,22 +254,16 @@ elif menu == "숲 시뮬레이션 맵":
                         )
                         for pid in pack_ids
                     }
-
-                    # 2마리 이상으로 이루어진 '진짜 무리'가 몇 개인지 확인
                     actual_packs = [
                         pid for pid in pack_ids if pack_sizes[pid] >= 2
                     ]
 
                     if len(actual_packs) >= 2:
-                        # 늑대 무리끼리 만났을 때 -> 우두머리끼리 싸움!
                         p1, p2 = actual_packs[0], actual_packs[1]
                         winner_pid, loser_pid = random.sample([p1, p2], 2)
-
-                        # 패배한 무리의 우두머리(1마리) 사망 처리
                         loser_leader = packs[loser_pid][0]
                         loser_leader["status"] = "사망"
 
-                        # 남은 패배 무리원들은 승리한 무리에 흡수됨
                         for w in all_living_wolves:
                             if (
                                 w["status"] == "생존"
@@ -274,7 +275,6 @@ elif menu == "숲 시뮬레이션 맵":
                             f"👑 늑대 무리 충돌({pos})! 우두머리 결투 끝에 패배한 우두머리가 사망하고 무리가 흡수되었습니다."
                         )
                     else:
-                        # 아직 무리가 아닌 늑대끼리 만났거나, 기존 무리에 솔로 늑대가 합류한 경우 -> 무리 형성!
                         target_pid = (
                             actual_packs[0] if actual_packs else pack_ids[0]
                         )
@@ -297,7 +297,8 @@ elif menu == "숲 시뮬레이션 맵":
                     has_male = any(c["gender"] == "수컷" for c in sub_group)
 
                     if has_female and has_male:
-                        if t_name == "토끼" and random.random() < 0.7:
+                        # 토끼 번식 확률 30%로 변경
+                        if t_name == "토끼" and random.random() < 0.30:
                             inc = random.randint(5, 10)
                             for _ in range(inc):
                                 st.session_state.creatures_list.append({
@@ -333,7 +334,6 @@ elif menu == "숲 시뮬레이션 맵":
 
                         elif t_name == "늑대" and random.random() < 0.5:
                             inc = random.randint(2, 6)
-                            # 부모 늑대의 무리(pack_id) 소속으로 함께 태어남
                             parent_pack_id = sub_group[0].get(
                                 "pack_id", sub_group[0]["id"]
                             )
@@ -417,11 +417,11 @@ elif menu == "숲 시뮬레이션 맵":
 
         st.session_state.event_logs = event_logs
 
-    # 5x5 숲 지도 시각화
+    # 5x5 숲 지도 시각화 (성별 아이콘 반영)
     display_grid = [["" for _ in range(5)] for _ in range(5)]
     for c in st.session_state.creatures_list:
         if c["status"] == "생존":
-            icon = icon_map.get(c["type"], "🐾")
+            icon = get_creature_icon(c["type"], c["gender"])
             x = max(0, min(4, c["x"]))
             y = max(0, min(4, c["y"]))
             if display_grid[x][y] == "":
@@ -429,7 +429,7 @@ elif menu == "숲 시뮬레이션 맵":
             else:
                 display_grid[x][y] += f" {icon}"
 
-    st.markdown("### 🗺️ 숲 구역 지도")
+    st.markdown("### 🗺️ 숲 구역 지도 (성별 표시)")
     for i in range(5):
         cols = st.columns(5)
         for j in range(5):
