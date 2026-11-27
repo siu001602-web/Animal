@@ -10,6 +10,8 @@ st.set_page_config(
 if "grid_size" not in st.session_state:
     st.session_state.grid_size = 5
     st.session_state.creatures_list = []
+    # 산불 상태 그리드 초기화 (False: 정상, True: 산불 발생)
+    st.session_state.fires = [[False for _ in range(5)] for _ in range(5)]
     cid = 1
 
     # 토끼 (암컷 10, 수컷 10)
@@ -46,7 +48,7 @@ if "grid_size" not in st.session_state:
         })
         cid += 1
 
-    # 늑대 (암컷 2, 수컷 2 - 각자 흩어져서 시작)
+    # 늑대 (암컷 2, 수컷 2)
     for g in ["암컷", "암컷", "수컷", "수컷"]:
         st.session_state.creatures_list.append({
             "id": cid,
@@ -100,7 +102,7 @@ if "grid_size" not in st.session_state:
 
 st.title("🌲 야생 숲 생태계 시뮬레이터")
 st.markdown(
-    "5×5 숲 지도에서 크리처들의 성별(♀/♂)과 신생 개체(✨)를 관찰하세요!"
+    "5×5 숲 지도에서 크리처들의 생존과 **산불 재난**을 관찰하세요!"
 )
 
 menu = st.sidebar.selectbox("메뉴 선택", ["숲 시뮬레이션 맵", "크리처 도감"])
@@ -143,16 +145,21 @@ def get_creature_icon(c):
 
 
 if menu == "크리처 도감":
-    st.subheader("📖 크리처 설정 가이드")
+    st.subheader("📖 크리처 및 재난 설정 가이드")
     st.markdown(
         """
     - **토끼**: HP 30, 공격력 5, 행동력 50 (초식) / 5% 도망 / 암수 한쌍 30% (5~10마리 증가)
     - **여우**: HP 40, 공격력 20, 행동력 30 (육식) / 20% 사냥감 추적 / 암수 한쌍 60% (2~3마리 증가)
     - **늑대**: HP 60, 공격력 30, 행동력 60 (육식) / 만나면 무리 형성 / 우두머리 결투 / 여우 사냥
-    - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / **75% 도망, 20% 변화없음, 5% 포식자 즉사**
-    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 3~10개 산란 (알은 3턴 후 부화)
-    - **✨ 표시**: 새로 태어난 신생 개체(NEW)
-    - **참고**: HP는 누적 피해 방식이므로 자동으로 회복되지 않습니다.
+    - **스컹크**: HP 50, 공격력 10, 행동력 40 (초식) / 75% 도망, 20% 변화없음, 5% 포식자 즉사
+    - **닭**: HP 20, 공격력 2, 행동력 5 (초식) / 암컷만 20% 확률로 알 산란
+      - **알**: **바로 다음 턴**에 병아리로 부화
+      - **병아리**: **3턴 후** 닭으로 성장
+    - 🔥 **산불 시스템**: 
+      - 각 지역마다 매턴 **0.1% 확률**로 자연발화 발생
+      - 매턴 인접 지역으로 **1% 확률**로 산불 번짐
+      - 산불이 난 지역은 **이용 불가(진입 불가)**
+      - 산불 발생 직전 해당 칸에 있던 개체는 **HP 10 피해**
     """
     )
 
@@ -172,12 +179,65 @@ elif menu == "숲 시뮬레이션 맵":
             if c["status"] == "생존":
                 c["is_new"] = False
 
+        event_logs = []
+
+        # --- [산불 시스템 처리] ---
+        new_fires = [
+            [st.session_state.fires[i][j] for j in range(5)] for i in range(5)
+        ]
+
+        for i in range(5):
+            for j in range(5):
+                if not st.session_state.fires[i][j]:
+                    # 1. 자연발화 (0.1% 확률)
+                    if random.random() < 0.001:
+                        new_fires[i][j] = True
+                        event_logs.append(
+                            f"🔥 경고! 좌표 ({i}, {j})에 산불이 발생했습니다!"
+                        )
+                    else:
+                        # 2. 인접 지역으로 산불 확산 (1% 확률)
+                        neighbors = [
+                            (i - 1, j),
+                            (i + 1, j),
+                            (i, j - 1),
+                            (i, j + 1),
+                        ]
+                        adjacent_on_fire = any(
+                            0 <= ni < 5
+                            and 0 <= nj < 5
+                            and st.session_state.fires[ni][nj]
+                            for ni, nj in neighbors
+                        )
+                        if adjacent_on_fire and random.random() < 0.01:
+                            new_fires[i][j] = True
+                            event_logs.append(
+                                f"🔥 산불이 인접 지역 ({i}, {j})(으)로 번졌습니다!"
+                            )
+
+        # 이번 턴에 새로 산불이 난 곳에 있는 크리처들 HP 10 닳음
+        for i in range(5):
+            for j in range(5):
+                if not st.session_state.fires[i][j] and new_fires[i][j]:
+                    for c in st.session_state.creatures_list:
+                        if c["status"] == "생존" and c["x"] == i and c["y"] == j:
+                            c["hp"] -= 10
+                            if c["hp"] <= 0:
+                                c["status"] = "사망"
+                                event_logs.append(
+                                    f"💀 크리처({c['type']})가 산불에 휘말려 사망했습니다!"
+                                )
+                            else:
+                                event_logs.append(
+                                    f"🔥 크리처({c['type']})가 산불 화상으로 HP 10 감소! (남은 HP: {c['hp']})"
+                                )
+
+        st.session_state.fires = new_fires
+
         living_creatures = [
             c for c in st.session_state.creatures_list if c["status"] == "생존"
         ]
         living_creatures.sort(key=lambda x: x["action"], reverse=True)
-
-        event_logs = []
 
         # 늑대 무리 이동 방향
         pack_moves = {}
@@ -189,25 +249,38 @@ elif menu == "숲 시뮬레이션 맵":
                         [(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)]
                     )
 
-        # 1. 이동 및 성장/부화 처리
+        # 1. 이동 및 성장/부화 처리 (산불 난 지역은 이동 불가)
         for c in living_creatures:
             if c["status"] != "생존":
                 continue
 
-            # 일반 이동
+            # 일반 이동 (산불 지역이 아닌 곳으로만 이동 시도)
             if c["type"] == "늑대":
                 pid = c.get("pack_id", c["id"])
                 dx, dy = pack_moves[pid]
-                c["x"] = max(0, min(4, c["x"] + dx))
-                c["y"] = max(0, min(4, c["y"] + dy))
+                nx = max(0, min(4, c["x"] + dx))
+                ny = max(0, min(4, c["y"] + dy))
+                if not st.session_state.fires[nx][ny]:
+                    c["x"], c["y"] = nx, ny
             elif c["type"] != "알":
-                dx, dy = random.choice([(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)])
-                c["x"] = max(0, min(4, c["x"] + dx))
-                c["y"] = max(0, min(4, c["y"] + dy))
+                # 최대 5번 시도하여 산불이 안 난 빈 칸이나 안전한 칸으로 이동
+                moves = [(0, 1), (0, -1), (1, 0), (-1, 0), (0, 0)]
+                random.shuffle(moves)
+                moved = False
+                for dx, dy in moves:
+                    nx = max(0, min(4, c["x"] + dx))
+                    ny = max(0, min(4, c["y"] + dy))
+                    if not st.session_state.fires[nx][ny]:
+                        c["x"], c["y"] = nx, ny
+                        moved = True
+                        break
 
             # 닭 산란 (암컷만, 20% 확률)
             if c["type"] == "닭" and c["gender"] == "암컷":
-                if random.random() < 0.20:
+                if (
+                    not st.session_state.fires[c["x"]][c["y"]]
+                    and random.random() < 0.20
+                ):
                     egg_count = random.randint(3, 10)
                     for _ in range(egg_count):
                         st.session_state.creatures_list.append({
@@ -227,10 +300,10 @@ elif menu == "숲 시뮬레이션 맵":
                         f"🐔 암컷 닭이 ({c['x']}, {c['y']})에 알 {egg_count}개를 산란했습니다!"
                     )
 
-            # 알 부화 처리 (3턴)
+            # 알 부화 처리 (바로 다음 턴에 병아리로 부화)
             elif c["type"] == "알":
                 c["age"] += 1
-                if c["age"] >= 3:
+                if c["age"] >= 1:  # 1턴 후 바로 부화
                     c["type"] = "병아리"
                     c["hp"] = 10
                     c["action"] = 3
@@ -241,10 +314,10 @@ elif menu == "숲 시뮬레이션 맵":
                         f"🥚 알이 부화하여 병아리({c['gender']})가 되었습니다! ({c['x']}, {c['y']})"
                     )
 
-            # 병아리 성장 (5턴 후 닭)
+            # 병아리 성장 (3턴 후 닭으로 성장)
             elif c["type"] == "병아리":
                 c["age"] += 1
-                if c["age"] >= 5:
+                if c["age"] >= 3:  # 3턴 후 닭으로 성장
                     c["type"] = "닭"
                     c["hp"] = 20
                     c["action"] = 5
@@ -264,6 +337,10 @@ elif menu == "숲 시뮬레이션 맵":
                 positions_map[pos_key].append(c)
 
         for pos, group in positions_map.items():
+            # 산불 난 지역에서는 상호작용(전투/번식) 불가
+            if st.session_state.fires[pos[0]][pos[1]]:
+                continue
+
             # 늑대 무리 결성 및 우두머리 결투
             wolves = [c for c in group if c["type"] == "늑대" and c["status"] == "생존"]
             if len(wolves) >= 2:
@@ -446,18 +523,18 @@ elif menu == "숲 시뮬레이션 맵":
                             event_logs.append("🐰 토끼가 도망쳤습니다!")
                             continue
 
-                        # 스컹크 독가스 특성 (75% 도망, 20% 변화없음, 5% 즉사)
+                        # 스컹크 독가스 (75% 도망, 20% 변화없음, 5% 즉사)
                         if prey["type"] == "스컹크":
                             sk_rand = random.random()
                             if sk_rand < 0.75:
-                                event_logs.append(f"🦨 스컹크의 악취 독가스! 포식자({pred['type']})가 도망쳤습니다.")
+                                event_logs.append(f"🦨 스컹크 악취! 포식자가 도망쳤습니다.")
                                 continue
                             elif sk_rand < 0.95:
-                                event_logs.append(f"🦨 스컹크의 독가스... 하지만 아무 일도 일어나지 않았습니다.")
+                                pass
                             else:
                                 pred["status"] = "사망"
                                 event_logs.append(
-                                    f"💀 스컹크의 치명적인 독가스로 포식자({pred['type']})가 즉사했습니다!"
+                                    f"💀 스컹크 독가스로 포식자({pred['type']}) 즉사!"
                                 )
                                 break
 
@@ -476,19 +553,26 @@ elif menu == "숲 시뮬레이션 맵":
 
         st.session_state.event_logs = event_logs
 
-    # 5x5 숲 지도 시각화
+    # 5x5 숲 지도 시각화 (산불 난 곳은 🔥로 표시)
     display_grid = [["" for _ in range(5)] for _ in range(5)]
+    for i in range(5):
+        for j in range(5):
+            if st.session_state.fires[i][j]:
+                display_grid[i][j] = "🔥"
+
     for c in st.session_state.creatures_list:
         if c["status"] == "생존":
-            icon = get_creature_icon(c)
             x = max(0, min(4, c["x"]))
             y = max(0, min(4, c["y"]))
-            if display_grid[x][y] == "":
-                display_grid[x][y] = icon
-            else:
-                display_grid[x][y] += f" {icon}"
+            # 산불이 난 칸이 아닐 때만 아이콘 표시
+            if not st.session_state.fires[x][y]:
+                icon = get_creature_icon(c)
+                if display_grid[x][y] == "":
+                    display_grid[x][y] = icon
+                else:
+                    display_grid[x][y] += f" {icon}"
 
-    st.markdown("### 🗺️ 숲 구역 지도 (✨는 이번 턴 신생 개체)")
+    st.markdown("### 🗺️ 숲 구역 지도 (🔥 산불 지역 / ✨ 신생 개체)")
     for i in range(5):
         cols = st.columns(5)
         for j in range(5):
